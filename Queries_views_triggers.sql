@@ -118,5 +118,42 @@ Write and execute the ALTER TABLE statement(s) needed to modify the Evidence tab
 
 ALTER TABLE Evidence MODIFY url varchar(500),
 					 ADD isbn varchar(13);
-                     
+/*
+Trigger 7:
+*/
+
+DELIMITER $$
+
+CREATE TRIGGER update_tweet_info
+AFTER INSERT ON RawTweet FOR EACH ROW
+BEGIN
+	INSERT INTO Tweeter(display_name, followers_count, handle, tweeter_id, verified)
+    VALUES(
+	JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.user.screen_name')),
+    JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.user.followers_count')),
+    JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.user.name')),
+    JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.user.id_str')),
+    CASE WHEN JSON_EXTRACT(NEW.content, '$.user.verified') THEN 1 ELSE 0 END)
+    ON DUPLICATE KEY UPDATE
+	display_name=JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.user.screen_name')),
+    followers_count=JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.user.followers_count')),
+	handle=JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.user.name'));
+    INSERT INTO Tweet(posting_datetime, posting_location_longitude, posting_location_latitude, quoted_tweet, replied_to_tweet, tweet_id, tweet_text, tweeter_id)
+    VALUES(
+    JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.created_at')),
+    JSON_EXTRACT(NEW.content, '$.geo.coordinates[0]'),
+    JSON_EXTRACT(NEW.content, '$.geo.coordinates[1]'),
+    JSON_EXTRACT(NEW.content, '$.quoted_status_id'),
+    JSON_EXTRACT(NEW.content, '$.in_reply_to_status_id'),
+    JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.id')),
+    JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.text')),
+    JSON_UNQUOTE(JSON_EXTRACT(NEW.content, '$.user.id_str')));
+
+
+    
+    CALL UpdateHashtags(tweet_id);
+END;
+$$
+
+DELIMITER ;
                      
